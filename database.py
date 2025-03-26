@@ -1,61 +1,62 @@
 import sqlite3
+from PyQt6.QtWidgets import QMessageBox
 
-def creer_base_de_donnees():
+
+def reset_database():
+    """Supprime et recrée toutes les tables de la base de données."""
     conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
 
-    # Table utilisateurs
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS utilisateurs (
+    try:
+        # Suppression des anciennes tables
+        cursor.executescript("""
+        DROP TABLE IF EXISTS ventes;
+        DROP TABLE IF EXISTS produits;
+        DROP TABLE IF EXISTS utilisateur;
+        DROP TABLE IF EXISTS audit_vente;
+        """)
+
+        # Recréation des tables
+        cursor.executescript("""
+        CREATE TABLE utilisateurs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
+            nom TEXT UNIQUE NOT NULL,
             role TEXT CHECK(role IN ('admin', 'client')) NOT NULL
-        )
-    ''')
+        );
 
-    # Table produits
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS produits (
+        CREATE TABLE produits (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nom TEXT NOT NULL,
-            prix REAL NOT NULL,
+            nom TEXT UNIQUE NOT NULL,
             stock INTEGER NOT NULL
-        )
-    ''')
+        );
 
-    # Table clients
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS clients (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nom TEXT NOT NULL
-        )
-    ''')
-
-    # Table vente (correction des références des clés étrangères)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ventes (
+        CREATE TABLE ventes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_id INTEGER NOT NULL,
             produit_id INTEGER NOT NULL,
             quantite INTEGER NOT NULL,
-            date TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (client_id) REFERENCES clients(id),
+            date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (client_id) REFERENCES utilisateur(id),
             FOREIGN KEY (produit_id) REFERENCES produits(id)
-        )
-    """)
+        );
 
-    conn.commit()
+        CREATE TABLE audit_vente (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            vente_id INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (vente_id) REFERENCES ventes(id)
+        );
+        """)
 
-    # Vérification si la table vente est bien créée
-    cursor.execute("PRAGMA table_info(ventes)")
-    columns = cursor.fetchall()
-    if not columns:
-        print(" Erreur : la table 'vente' n'a pas été créée correctement.")
-    else:
-        print(" Base de données initialisée avec succès !")
+        conn.commit()
+        print("Base de données réinitialisée avec succès.")
 
-    conn.close()
+    except sqlite3.Error as e:
+        print(f"Erreur lors de la réinitialisation : {e}")
+
+    finally:
+        conn.close()
 
 ### === FONCTIONS POUR LES PRODUITS === ###
 def ajouter_produit(nom, prix, stock):
@@ -65,12 +66,21 @@ def ajouter_produit(nom, prix, stock):
     conn.commit()
     conn.close()
 
+
 def modifier_produit(id_produit, nom, prix, stock):
+    # Connexion à la base de données
     conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
-    cursor.execute("UPDATE produits SET nom=?, prix=?, stock=? WHERE id=?", (nom, prix, stock, id_produit))
+    
+    # Exécution de la requête de mise à jour du produit
+    cursor.execute("""
+        UPDATE produits
+        SET nom = ?, prix = ?, stock = ?
+        WHERE id = ?
+    """, (nom, prix, stock, id_produit))
+    
+    # Validation de la modification et fermeture de la connexion
     conn.commit()
-    conn.close()
 
 def supprimer_produit(id_produit):
     conn = sqlite3.connect("vente.db")
@@ -85,34 +95,36 @@ def obtenir_produits():
     cursor.execute("SELECT * FROM produits")
     produits = cursor.fetchall()
     conn.close()
+     # Débogage : Vérifiez ce qui est récupéré
+    print(f"DEBUG: Produits récupérés - {produits}")
     return produits
 
 ### === FONCTIONS POUR LES CLIENTS === ###
 def ajouter_client(nom):
     conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO clients (nom) VALUES (?)", (nom,))
+    cursor.execute("INSERT INTO utilisateurs (nom) VALUES (?)", (nom,))
     conn.commit()
     conn.close()
 
 def modifier_client(id_client, nom):
     conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
-    cursor.execute("UPDATE clients SET nom=? WHERE id=?", (nom, id_client))
+    cursor.execute("UPDATE utilisateurs SET nom=? WHERE id=?", (nom, id_client))
     conn.commit()
     conn.close()
 
 def supprimer_client(id_client):
     conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM clients WHERE id=?", (id_client,))
+    cursor.execute("DELETE FROM utilisateurs WHERE id=?", (id_client,))
     conn.commit()
     conn.close()
 
 def obtenir_clients():
     conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM clients")
+    cursor.execute("SELECT * FROM utilisateurs")
     clients = cursor.fetchall()
     conn.close()
     return clients
@@ -126,13 +138,55 @@ def obtenir_ventes():
     conn.close()
     return ventes
 
+
+
+
+import sqlite3
+
 def ajouter_vente(client_id, produit_id, quantite):
     conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO ventes (client_id, produit_id, quantite, date) VALUES (?, ?, ?, datetime('now'))",
-                   (client_id, produit_id, quantite))
-    conn.commit()
-    conn.close()
+
+    try:
+        # Vérifier le stock disponible
+        cursor.execute("SELECT stock FROM produits WHERE id = ?", (produit_id,))
+        produit = cursor.fetchone()
+
+        if produit is None:
+            print("DEBUG - Produit introuvable")
+            return False  # Produit introuvable
+
+        stock_disponible = produit[0]
+
+        if stock_disponible < quantite:
+            print("DEBUG - Stock insuffisant")
+            return False  # Stock insuffisant
+
+        # Insérer la vente
+        print(f"DEBUG - Ajout vente | client_id: {client_id}, produit_id: {produit_id}, quantite: {quantite}")
+        cursor.execute("INSERT INTO ventes (client_id, produit_id, quantite, date) VALUES (?, ?, ?, datetime('now'))",
+                       (client_id, produit_id, quantite))
+
+        # Mettre à jour le stock du produit
+        nouveau_stock = stock_disponible - quantite
+        cursor.execute("UPDATE produits SET stock = ? WHERE id = ?", (nouveau_stock, produit_id))
+
+        conn.commit()
+        print("DEBUG - Vente ajoutée avec succès")
+        return True  # Vente réussie
+
+    except sqlite3.Error as e:
+        print(f"DEBUG - Erreur SQLite : {e}")
+        return False
+
+    finally:
+        conn.close()
+
+
+# def ajouter_vente(username, id_produit, quantite):
+#     print(f"DEBUG - ajouter_vente appelé avec: {username}, {id_produit}, {quantite}")
+#     return True  # Simule un achat réussi
+
 
 def modifier_vente(id_vente, nouvelle_quantite):
     conn = sqlite3.connect("vente.db")
@@ -150,26 +204,33 @@ def supprimer_vente(id_vente):
 
 ### === FONCTIONS POUR LES UTILISATEURS === ###
 
-def ajouter_utilisateur(username, password, role):
+def ajouter_utilisateur(nom, password, role):
     """Ajoute un nouvel utilisateur."""
     conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
     try:
-        cursor.execute("INSERT INTO utilisateurs (username, password, role) VALUES (?, ?, ?)",
-                       (username, password, role))
+        cursor.execute("INSERT INTO utilisateurs (nom, password, role) VALUES (?, ?, ?)",
+                       (nom, password, role))
         conn.commit()
     except sqlite3.IntegrityError:
-        print("❌ Nom d'utilisateur déjà pris !")
+        print(" Nom d'utilisateur déjà pris !")
     conn.close()
 
-def modifier_utilisateur(id_utilisateur, username, password, role):
-    """Modifie les informations d'un utilisateur."""
+def modifier_utilisateur(id_utilisateur, nom, mdp, role):
     conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
-    cursor.execute("UPDATE utilisateurs SET username=?, password=?, role=? WHERE id=?",
-                   (username, password, role, id_utilisateur))
+
+    # Exécuter la requête pour mettre à jour l'utilisateur dans la base de données
+    cursor.execute("""
+        UPDATE utilisateurs
+        SET nom = ?, password = ?, role = ?
+        WHERE id = ?
+    """, (nom, mdp, role, id_utilisateur))
+
     conn.commit()
     conn.close()
+
+
 
 def supprimer_utilisateur(id_utilisateur):
     """Supprime un utilisateur de la base de données."""
@@ -188,25 +249,36 @@ def obtenir_utilisateurs():
     conn.close()
     return utilisateurs
 
-def obtenir_ventes_client(client_nom):
-    """Récupère l'historique des achats d'un client."""
-    conn = sqlite3.connect("vente.db")  
+def obtenir_ventes_client():
+    conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
 
-    query = """
-    SELECT v.id, p.nom AS produit, v.quantite, v.date
-    FROM ventes v
-    JOIN produits p ON v.produit_id = p.id
-    JOIN clients c ON v.client_id = c.id
-    WHERE c.nom = ?
-    ORDER BY v.date DESC
-    """
-    
-    cursor.execute(query, (client_nom,))
+    cursor.execute("SELECT * FROM ventes")  # Sélectionne toutes les ventes
     ventes = cursor.fetchall()
 
     conn.close()
-    return ventes
+    return ventes  # Retourne toutes les ventes
+
+
+#resaka audit
+def obtenir_audit_ventes():
+    conn = sqlite3.connect("vente.db")
+    cursor = conn.cursor()
+
+    # Récupérer tous les logs d'audit
+    cursor.execute("SELECT action, date, vente_id FROM audit_vente")
+    logs = cursor.fetchall()
+
+    # Compter les insertions, modifications et suppressions
+    insertions = sum(1 for log in logs if log[0] == "INSERT")
+    modifications = sum(1 for log in logs if log[0] == "UPDATE")
+    suppressions = sum(1 for log in logs if log[0] == "DELETE")
+
+    conn.close()
+    return logs, insertions, modifications, suppressions
+
+
+    
 
 if __name__ == "__main__":
-    creer_base_de_donnees()
+    reset_database()

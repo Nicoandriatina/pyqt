@@ -4,6 +4,7 @@ from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QLabel, QPushBut
 from admin_ui import AdminUI
 from client_ui import ClientUI
 
+
 class AuthWindow(QWidget):
     def __init__(self):
         super().__init__()
@@ -33,7 +34,7 @@ class AuthWindow(QWidget):
 
         conn = sqlite3.connect("vente.db")
         cursor = conn.cursor()
-        cursor.execute("SELECT role FROM utilisateurs WHERE username=? AND password=?", (username, password))
+        cursor.execute("SELECT role FROM utilisateurs WHERE nom=? AND password=?", (username, password))
         user = cursor.fetchone()
         conn.close()
 
@@ -42,7 +43,7 @@ class AuthWindow(QWidget):
             if role == "admin":
                 self.open_admin_ui()
             elif role == "client":
-                self.open_client_ui(username)
+                self.open_client_ui(username)  # ✅ Correction : passer `username`
         else:
             QMessageBox.warning(self, "Erreur", "Nom d'utilisateur ou mot de passe incorrect !")
 
@@ -51,8 +52,8 @@ class AuthWindow(QWidget):
         self.admin_window.show()
         self.close()
 
-    def open_client_ui(self, username):
-        self.client_window = ClientUI(username)
+    def open_client_ui(self, nom):
+        self.client_window = ClientUI(nom)
         self.client_window.show()
         self.close()
 

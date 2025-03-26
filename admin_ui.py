@@ -1,12 +1,14 @@
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, 
     QLineEdit, QTableWidget, QTableWidgetItem, QMessageBox, 
-    QTabWidget, QHBoxLayout
+    QTabWidget, QHBoxLayout, QMainWindow
 )
+
+
 from database import (
     obtenir_produits, ajouter_produit, modifier_produit, supprimer_produit, 
     obtenir_clients, ajouter_client, modifier_client, supprimer_client,
-    obtenir_ventes, ajouter_vente, modifier_vente, supprimer_vente,obtenir_utilisateurs, ajouter_utilisateur, modifier_utilisateur, supprimer_utilisateur
+    obtenir_ventes, ajouter_vente, modifier_vente, supprimer_vente,obtenir_utilisateurs, ajouter_utilisateur, modifier_utilisateur, supprimer_utilisateur, obtenir_audit_ventes
 
 )
 
@@ -24,20 +26,65 @@ class AdminUI(QWidget):
         self.tab_clients = QWidget()
         self.tab_ventes = QWidget()
         self.tab_utilisateurs = QWidget()
+        self.tab_audit = QWidget()
 
         self.tabs.addTab(self.tab_produits, "Gestion des Produits")
-        self.tabs.addTab(self.tab_clients, "Gestion des Clients")
+        # self.tabs.addTab(self.tab_clients, "Gestion des Clients")
         self.tabs.addTab(self.tab_ventes, "Gestion des Ventes")
         self.tabs.addTab(self.tab_utilisateurs, "Gestion des Utilisateurs")
+        self.tabs.addTab(self.tab_audit,"Audit des Ventes")
 
         self.layout.addWidget(self.tabs)
         self.setLayout(self.layout)
 
         # Ajouter les interfaces pour chaque onglet
         self.setup_produit_ui()
-        self.setup_client_ui()
+        # self.setup_client_ui()
         self.setup_ventes_ui()
         self.setup_utilisateur_ui()
+        self.setup_audit_ui()
+
+
+        # Bouton de déconnexion
+        self.btn_deconnexion = QPushButton("Déconnexion")
+        self.btn_deconnexion.clicked.connect(self.deconnexion)
+        self.layout.addWidget(self.btn_deconnexion)
+
+    def deconnexion(self):
+        """Ferme l'interface admin et revient à l'authentification."""
+        from auth import AuthWindow  # Importation tardive pour éviter l'importation circulaire
+        self.close()
+        self.auth_window = AuthWindow()
+        self.auth_window.show()
+
+
+    # === Onglet Audit des Ventes ===
+    def setup_audit_ui(self):
+        layout = QVBoxLayout()
+
+        self.table_audit = QTableWidget()
+        self.table_audit.setColumnCount(7)
+        self.table_audit.setHorizontalHeaderLabels([
+            "Type Opération", "Date MAJ", "Nom Client", "Désignation Produit",
+            "Quantité Ancienne", "Quantité Nouvelle", "Utilisateur"
+        ])
+
+        self.btn_refresh_audit = QPushButton("Actualiser")
+        self.btn_refresh_audit.clicked.connect(self.refresh_audit_table)
+
+        layout.addWidget(self.table_audit)
+        layout.addWidget(self.btn_refresh_audit)
+
+        self.tab_audit.setLayout(layout)
+
+    def refresh_audit_table(self):
+        audit_logs = obtenir_audit_ventes()
+        self.table_audit.setRowCount(len(audit_logs))
+
+        for row_idx, log in enumerate(audit_logs):
+            for col_idx, data in enumerate(log):
+                self.table_audit.setItem(row_idx, col_idx, QTableWidgetItem(str(data)))
+
 
     # === Onglet Gestion des Produits ===
     def setup_produit_ui(self):
@@ -58,12 +105,15 @@ class AdminUI(QWidget):
         self.btn_modifier_produit = QPushButton("Modifier Produit")
         self.btn_modifier_produit.clicked.connect(self.modifier_produit)
 
+
         self.btn_supprimer_produit = QPushButton("Supprimer Produit")
         self.btn_supprimer_produit.clicked.connect(self.supprimer_produit)
 
         self.table_produits = QTableWidget()
         self.table_produits.setColumnCount(4)
-        self.table_produits.setHorizontalHeaderLabels(["ID", "Nom", "Prix", "Stock"])
+        self.table_produits.setHorizontalHeaderLabels(["ID", "Nom", "Stock", "Prix"])
+        self.table_produits.itemSelectionChanged.connect(self.remplir_champs_produit)
+
         
         layout.addWidget(QLabel("Nom:"))
         layout.addWidget(self.nom_produit_input)
@@ -78,6 +128,24 @@ class AdminUI(QWidget):
 
         self.tab_produits.setLayout(layout)
         self.refresh_produit_table()
+
+    def remplir_champs_produit(self):
+        selected_row = self.table_produits.currentRow()
+        if selected_row == -1:
+            return  # Aucun produit sélectionné
+
+        # Débogage : Vérifiez les valeurs récupérées de la table
+        print(f"DEBUG: Ligne sélectionnée {selected_row}")
+        print(f"DEBUG: Nom: {self.table_produits.item(selected_row, 1).text()}")
+        print(f"DEBUG: Prix: {self.table_produits.item(selected_row, 2).text()}")
+        print(f"DEBUG: Stock: {self.table_produits.item(selected_row, 3).text()}")
+
+        # Remplir les champs avec les données sélectionnées
+        if self.table_produits.item(selected_row, 1) and self.table_produits.item(selected_row, 2) and self.table_produits.item(selected_row, 3):
+            self.nom_produit_input.setText(self.table_produits.item(selected_row, 1).text())
+            self.prix_produit_input.setText(self.table_produits.item(selected_row, 2).text())
+            self.stock_produit_input.setText(self.table_produits.item(selected_row, 3).text())
+
 
     def refresh_produit_table(self):
         produits = obtenir_produits()
@@ -111,7 +179,7 @@ class AdminUI(QWidget):
         stock = self.stock_produit_input.text()
 
         if nom and prix and stock:
-            modifier_produit(id_produit, nom, float(prix), int(stock))
+            modifier_produit(id_produit, nom, float(prix), int(float(stock)))
             self.refresh_produit_table()
             QMessageBox.information(self, "Succès", "Produit modifié avec succès !")
         else:
@@ -124,9 +192,21 @@ class AdminUI(QWidget):
             return
 
         id_produit = int(self.table_produits.item(selected_row, 0).text())
-        supprimer_produit(id_produit)
-        self.refresh_produit_table()
-        QMessageBox.information(self, "Succès", "Produit supprimé avec succès !")
+
+        # Afficher une boîte de confirmation avant de supprimer
+        reply = QMessageBox.question(
+            self,
+            "Confirmation",
+            "Voulez-vous vraiment supprimer ce produit ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            supprimer_produit(id_produit)
+            self.refresh_produit_table()
+            QMessageBox.information(self, "Succès", "Produit supprimé avec succès !")
+
 
     # === Onglet Gestion des Clients ===
     def setup_client_ui(self):
@@ -300,6 +380,9 @@ class AdminUI(QWidget):
         self.nom_utilisateur_input = QLineEdit()
         self.nom_utilisateur_input.setPlaceholderText("Nom d'utilisateur")
 
+        self.role_utilisateur_input = QLineEdit()
+        self.role_utilisateur_input.setPlaceholderText("Role de l'utilisateur")
+
         self.mdp_utilisateur_input = QLineEdit()
         self.mdp_utilisateur_input.setPlaceholderText("Mot de passe")
         self.mdp_utilisateur_input.setEchoMode(QLineEdit.EchoMode.Password)
@@ -314,11 +397,15 @@ class AdminUI(QWidget):
         self.btn_supprimer_utilisateur.clicked.connect(self.supprimer_utilisateur)
 
         self.table_utilisateurs = QTableWidget()
-        self.table_utilisateurs.setColumnCount(2)
-        self.table_utilisateurs.setHorizontalHeaderLabels(["ID", "Nom d'utilisateur"])
+        self.table_utilisateurs.setColumnCount(3)
+        self.table_utilisateurs.setHorizontalHeaderLabels(["ID", "Nom d'utilisateur","Role"])
+        self.table_utilisateurs.itemSelectionChanged.connect(self.remplir_champs_utilisateur)
+
 
         layout.addWidget(QLabel("Nom d'utilisateur:"))
         layout.addWidget(self.nom_utilisateur_input)
+        layout.addWidget(QLabel("Role de l'utilisateur:"))
+        layout.addWidget(self.role_utilisateur_input)
         layout.addWidget(QLabel("Mot de passe:"))
         layout.addWidget(self.mdp_utilisateur_input)
         layout.addWidget(self.btn_ajouter_utilisateur)
@@ -338,14 +425,37 @@ class AdminUI(QWidget):
 
     def ajouter_utilisateur(self):
         nom = self.nom_utilisateur_input.text()
+        role = self.role_utilisateur_input.text()
         mdp = self.mdp_utilisateur_input.text()
 
         if nom and mdp:
-            ajouter_utilisateur(nom, mdp)
+            ajouter_utilisateur(nom, mdp, role)
             self.refresh_utilisateur_table()
             QMessageBox.information(self, "Succès", "Utilisateur ajouté avec succès !")
         else:
             QMessageBox.warning(self, "Erreur", "Veuillez remplir tous les champs.")
+
+    def remplir_champs_utilisateur(self):
+        selected_row = self.table_utilisateurs.currentRow()
+        if selected_row == -1:
+            return  # Aucun utilisateur sélectionné
+
+        # Récupérer les informations de l'utilisateur sélectionné
+        id_utilisateur = self.table_utilisateurs.item(selected_row, 0).text()
+        nom_utilisateur = self.table_utilisateurs.item(selected_row, 1).text()
+        mdp_utilisateur = self.table_utilisateurs.item(selected_row, 2).text()
+
+        # Vérifier si la cellule du rôle existe avant d'essayer d'y accéder
+        role_utilisateur_item = self.table_utilisateurs.item(selected_row, 3)
+        if role_utilisateur_item:
+            role_utilisateur = role_utilisateur_item.text()
+        else:
+            role_utilisateur = ''  # ou définir une valeur par défaut comme ''
+
+        # Afficher les informations dans les champs d'édition
+        self.nom_utilisateur_input.setText(nom_utilisateur)
+        self.mdp_utilisateur_input.setText(mdp_utilisateur)
+        self.role_utilisateur_input.setText(role_utilisateur)
 
     def modifier_utilisateur(self):
         selected_row = self.table_utilisateurs.currentRow()
@@ -353,12 +463,19 @@ class AdminUI(QWidget):
             QMessageBox.warning(self, "Erreur", "Veuillez sélectionner un utilisateur.")
             return
 
-        id_utilisateur = int(self.table_utilisateurs.item(selected_row, 0).text())
+        id_utilisateur = self.table_utilisateurs.item(selected_row, 0).text()
         nom = self.nom_utilisateur_input.text()
         mdp = self.mdp_utilisateur_input.text()
 
-        if nom and mdp:
-            modifier_utilisateur(id_utilisateur, nom, mdp)
+        # Récupérer le rôle de l'utilisateur (Assurez-vous que cette ligne récupère correctement le rôle)
+        role = self.role_utilisateur_input.text()  # Supposons que vous avez un champ pour le rôle
+
+        print(f"DEBUG: Modification de l'utilisateur {id_utilisateur} - {nom}, {mdp}, {role}")
+
+        # Assurez-vous que tous les champs sont remplis
+        if nom and mdp and role:
+            # Passer tous les arguments nécessaires à la fonction modifier_utilisateur
+            modifier_utilisateur(id_utilisateur, nom, mdp, role)
             self.refresh_utilisateur_table()
             QMessageBox.information(self, "Succès", "Utilisateur modifié avec succès !")
         else:
