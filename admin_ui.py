@@ -1,9 +1,11 @@
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QPushButton, 
     QLineEdit, QTableWidget, QTableWidgetItem, QMessageBox, 
-    QTabWidget, QHBoxLayout, QMainWindow
+    QTabWidget, QHBoxLayout, QFrame
 )
 
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QIcon
 
 from database import (
     obtenir_produits, ajouter_produit, modifier_produit, supprimer_produit, 
@@ -16,10 +18,76 @@ class AdminUI(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Espace Administrateur")
-        self.setGeometry(100, 100, 700, 500)
+        self.setGeometry(100, 100, 900, 600)
+        self.setStyleSheet("background-color: #f4f4f4; border-radius: 10px;")
 
-        self.layout = QVBoxLayout()
-        
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+# contenu principal
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        #titre 
+          # === Barre de titre personnalisée ===
+        self.title_bar = QHBoxLayout()
+        self.title_bar.setContentsMargins(10, 5, 10, 5)
+
+        self.title_label = QLabel("Espace Administrateur")
+        self.title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: white;")
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.close_btn = QPushButton("")
+        self.minimize_btn = QPushButton("")
+        self.maximize_btn = QPushButton("")
+
+        for btn in (self.close_btn, self.minimize_btn, self.maximize_btn):
+            btn.setFixedSize(QSize(16, 16))
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #E74C3C;
+                    border-radius: 8px;
+                    border: none;
+                }
+                QPushButton:hover {
+                    background-color: #C0392B;
+                }
+            """)
+
+        self.minimize_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #F1C40F;
+                border-radius: 8px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #D4AC0D;
+            }
+        """)
+
+        self.maximize_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2ECC71;
+                border-radius: 8px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #27AE60;
+            }
+        """)
+
+        self.close_btn.clicked.connect(self.close)
+        self.minimize_btn.clicked.connect(self.showMinimized)
+        self.maximize_btn.clicked.connect(self.toggle_maximize)
+
+        self.title_bar.addWidget(self.title_label)
+        self.title_bar.addStretch()
+        self.title_bar.addWidget(self.minimize_btn)
+        self.title_bar.addWidget(self.maximize_btn)
+        self.title_bar.addWidget(self.close_btn)
+
+        title_container = QWidget()
+        title_container.setLayout(self.title_bar)
+        title_container.setStyleSheet("background-color: #2c3e50; padding: 5px;")
+
+        self.main_layout.addWidget(title_container)
         # Onglets (Produits / Clients)
         self.tabs = QTabWidget()
         self.tab_produits = QWidget()
@@ -34,8 +102,8 @@ class AdminUI(QWidget):
         self.tabs.addTab(self.tab_utilisateurs, "Gestion des Utilisateurs")
         self.tabs.addTab(self.tab_audit,"Audit des Ventes")
 
-        self.layout.addWidget(self.tabs)
-        self.setLayout(self.layout)
+        self.main_layout.addWidget(self.tabs)
+        self.setLayout(self.main_layout)
 
         # Ajouter les interfaces pour chaque onglet
         self.setup_produit_ui()
@@ -47,8 +115,27 @@ class AdminUI(QWidget):
 
         # Bouton de déconnexion
         self.btn_deconnexion = QPushButton("Déconnexion")
+        self.btn_deconnexion.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                padding: 8px;
+                font-size: 14px;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #C0392B;
+            }
+        """)
         self.btn_deconnexion.clicked.connect(self.deconnexion)
-        self.layout.addWidget(self.btn_deconnexion)
+        self.main_layout.addWidget(self.btn_deconnexion)
+
+    def toggle_maximize(self):
+        """Bascule entre le mode maximisé et restauré."""
+        if self.isMaximized():
+            self.showNormal()
+        else:
+            self.showMaximized()
 
     def deconnexion(self):
         """Ferme l'interface admin et revient à l'authentification."""
@@ -68,6 +155,7 @@ class AdminUI(QWidget):
             "Type Opération", "Date MAJ", "Nom Client", "Désignation Produit",
             "Quantité Ancienne", "Quantité Nouvelle", "Utilisateur"
         ])
+        self.table_audit.setStyleSheet("background-color: white; border: 1px solid #ccc;")
 
         self.btn_refresh_audit = QPushButton("Actualiser")
         self.btn_refresh_audit.clicked.connect(self.refresh_audit_table)
@@ -90,6 +178,9 @@ class AdminUI(QWidget):
     def setup_produit_ui(self):
         layout = QVBoxLayout()
 
+    #formulaire
+        form_layout = QHBoxLayout()
+
         self.nom_produit_input = QLineEdit()
         self.nom_produit_input.setPlaceholderText("Nom du produit")
 
@@ -99,36 +190,41 @@ class AdminUI(QWidget):
         self.stock_produit_input = QLineEdit()
         self.stock_produit_input.setPlaceholderText("Stock")
 
-        self.btn_ajouter_produit = QPushButton("Ajouter Produit")
-        self.btn_ajouter_produit.clicked.connect(self.ajouter_produit)
+        form_layout.addWidget(self.nom_produit_input)
+        form_layout.addWidget(self.prix_produit_input)
+        form_layout.addWidget(self.stock_produit_input)
 
-        self.btn_modifier_produit = QPushButton("Modifier Produit")
-        self.btn_modifier_produit.clicked.connect(self.modifier_produit)
+        layout.addLayout(form_layout)
 
+        #bouton
+        btn_layout = QHBoxLayout()
+        self.btn_ajouter_produit = QPushButton("Ajouter")
+        self.btn_modifier_produit = QPushButton("Modifier")
+        self.btn_supprimer_produit = QPushButton("Supprimer")
 
-        self.btn_supprimer_produit = QPushButton("Supprimer Produit")
-        self.btn_supprimer_produit.clicked.connect(self.supprimer_produit)
+        for btn in [self.btn_ajouter_produit, self.btn_modifier_produit, self.btn_supprimer_produit]:
+            btn.setStyleSheet("background-color: #3498db; color: white; padding: 6px; font-size: 14px; border-radius: 5px;")
+            btn_layout.addWidget(btn)
 
+        layout.addLayout(btn_layout)
+
+    #tableau
         self.table_produits = QTableWidget()
         self.table_produits.setColumnCount(4)
-        self.table_produits.setHorizontalHeaderLabels(["ID", "Nom", "Stock", "Prix"])
+        self.table_produits.setHorizontalHeaderLabels(["ID", "Nom", "Prix", "stock"])
+        self.table_produits.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+
+        layout.addWidget(self.table_produits)
+        self.tab_produits.setLayout(layout)
+        self.refresh_produit_table()
+        
+        #connection de event
+        self.btn_ajouter_produit.clicked.connect(self.ajouter_produit)
+        self.btn_modifier_produit.clicked.connect(self.modifier_produit)
+        self.btn_supprimer_produit.clicked.connect(self.supprimer_produit)
         self.table_produits.itemSelectionChanged.connect(self.remplir_champs_produit)
 
         
-        layout.addWidget(QLabel("Nom:"))
-        layout.addWidget(self.nom_produit_input)
-        layout.addWidget(QLabel("Prix:"))
-        layout.addWidget(self.prix_produit_input)
-        layout.addWidget(QLabel("Stock:"))
-        layout.addWidget(self.stock_produit_input)
-        layout.addWidget(self.btn_ajouter_produit)
-        layout.addWidget(self.btn_modifier_produit)
-        layout.addWidget(self.btn_supprimer_produit)
-        layout.addWidget(self.table_produits)
-
-        self.tab_produits.setLayout(layout)
-        self.refresh_produit_table()
-
     def remplir_champs_produit(self):
         selected_row = self.table_produits.currentRow()
         if selected_row == -1:
@@ -150,11 +246,9 @@ class AdminUI(QWidget):
     def refresh_produit_table(self):
         produits = obtenir_produits()
         self.table_produits.setRowCount(len(produits))
-
         for row_idx, produit in enumerate(produits):
             for col_idx, data in enumerate(produit):
                 self.table_produits.setItem(row_idx, col_idx, QTableWidgetItem(str(data)))
-
     def ajouter_produit(self):
         nom = self.nom_produit_input.text()
         prix = self.prix_produit_input.text()
@@ -182,8 +276,6 @@ class AdminUI(QWidget):
             modifier_produit(id_produit, nom, float(prix), int(float(stock)))
             self.refresh_produit_table()
             QMessageBox.information(self, "Succès", "Produit modifié avec succès !")
-        else:
-            QMessageBox.warning(self, "Erreur", "Veuillez remplir tous les champs.")
 
     def supprimer_produit(self):
         selected_row = self.table_produits.currentRow()
@@ -193,11 +285,8 @@ class AdminUI(QWidget):
 
         id_produit = int(self.table_produits.item(selected_row, 0).text())
 
-        # Afficher une boîte de confirmation avant de supprimer
         reply = QMessageBox.question(
-            self,
-            "Confirmation",
-            "Voulez-vous vraiment supprimer ce produit ?",
+            self, "Confirmation", "Voulez-vous vraiment supprimer ce produit ?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
@@ -207,92 +296,21 @@ class AdminUI(QWidget):
             self.refresh_produit_table()
             QMessageBox.information(self, "Succès", "Produit supprimé avec succès !")
 
-
-    # === Onglet Gestion des Clients ===
-    def setup_client_ui(self):
-        layout = QVBoxLayout()
-
-        self.nom_client_input = QLineEdit()
-        self.nom_client_input.setPlaceholderText("Nom du client")
-
-        self.btn_ajouter_client = QPushButton("Ajouter Client")
-        self.btn_ajouter_client.clicked.connect(self.ajouter_client)
-
-        self.btn_modifier_client = QPushButton("Modifier Client")
-        self.btn_modifier_client.clicked.connect(self.modifier_client)
-
-        self.btn_supprimer_client = QPushButton("Supprimer Client")
-        self.btn_supprimer_client.clicked.connect(self.supprimer_client)
-
-        self.table_clients = QTableWidget()
-        self.table_clients.setColumnCount(2)
-        self.table_clients.setHorizontalHeaderLabels(["ID", "Nom"])
-        
-        layout.addWidget(QLabel("Nom:"))
-        layout.addWidget(self.nom_client_input)
-        layout.addWidget(self.btn_ajouter_client)
-        layout.addWidget(self.btn_modifier_client)
-        layout.addWidget(self.btn_supprimer_client)
-        layout.addWidget(self.table_clients)
-
-        self.tab_clients.setLayout(layout)
-        self.refresh_client_table()
-
-    def refresh_client_table(self):
-        clients = obtenir_clients()
-        self.table_clients.setRowCount(len(clients))
-
-        for row_idx, client in enumerate(clients):
-            for col_idx, data in enumerate(client):
-                self.table_clients.setItem(row_idx, col_idx, QTableWidgetItem(str(data)))
-
-    def ajouter_client(self):
-        nom = self.nom_client_input.text()
-
-        if nom:
-            ajouter_client(nom)
-            self.refresh_client_table()
-            QMessageBox.information(self, "Succès", "Client ajouté avec succès !")
-        else:
-            QMessageBox.warning(self, "Erreur", "Veuillez entrer un nom.")
-
-    def modifier_client(self):
-        selected_row = self.table_clients.currentRow()
-        if selected_row == -1:
-            QMessageBox.warning(self, "Erreur", "Veuillez sélectionner un client.")
-            return
-
-        id_client = int(self.table_clients.item(selected_row, 0).text())
-        nom = self.nom_client_input.text()
-
-        if nom:
-            modifier_client(id_client, nom)
-            self.refresh_client_table()
-            QMessageBox.information(self, "Succès", "Client modifié avec succès !")
-        else:
-            QMessageBox.warning(self, "Erreur", "Veuillez entrer un nom.")
-
-    def supprimer_client(self):
-        selected_row = self.table_clients.currentRow()
-        if selected_row == -1:
-            QMessageBox.warning(self, "Erreur", "Veuillez sélectionner un client.")
-            return
-
-        id_client = int(self.table_clients.item(selected_row, 0).text())
-        supprimer_client(id_client)
-        self.refresh_client_table()
-        QMessageBox.information(self, "Succès", "Client supprimé avec succès !")
-
     # === Onglet Gestion des Ventes ===
     def setup_ventes_ui(self):
         layout = QVBoxLayout()
 
+        # === Tableau des ventes ===
         self.table_ventes = QTableWidget()
         self.table_ventes.setColumnCount(5)
         self.table_ventes.setHorizontalHeaderLabels(["ID", "Client", "Produit", "Quantité", "Date"])
-        self.refresh_vente_table()
+        self.table_ventes.setStyleSheet("background-color: white; border: 1px solid #ccc;")
 
-        # Champs pour ajouter une vente
+        layout.addWidget(self.table_ventes)
+
+        # === Formulaire pour ajouter une vente ===
+        form_layout = QHBoxLayout()
+
         self.client_id_input = QLineEdit()
         self.client_id_input.setPlaceholderText("ID Client")
 
@@ -302,37 +320,57 @@ class AdminUI(QWidget):
         self.quantite_input = QLineEdit()
         self.quantite_input.setPlaceholderText("Quantité")
 
-        self.btn_ajouter_vente = QPushButton("Ajouter Vente")
-        self.btn_ajouter_vente.clicked.connect(self.ajouter_vente)
+        form_layout.addWidget(self.client_id_input)
+        form_layout.addWidget(self.produit_id_input)
+        form_layout.addWidget(self.quantite_input)
 
-        # Champs pour modifier/supprimer une vente
+        layout.addLayout(form_layout)
+
+        # === Boutons pour gérer les ventes ===
+        btn_layout = QHBoxLayout()
+        self.btn_ajouter_vente = QPushButton("Ajouter")
+        self.btn_modifier_vente = QPushButton("Modifier")
+        self.btn_supprimer_vente = QPushButton("Supprimer")
+
+        for btn in [self.btn_ajouter_vente, self.btn_modifier_vente, self.btn_supprimer_vente]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #3498db;
+                    color: white;
+                    padding: 6px;
+                    font-size: 14px;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+            """)
+            btn_layout.addWidget(btn)
+
+        layout.addLayout(btn_layout)
+
+        # === Formulaire pour modifier/supprimer une vente ===
+        edit_form_layout = QHBoxLayout()
+
         self.id_vente_input = QLineEdit()
         self.id_vente_input.setPlaceholderText("ID Vente")
 
         self.nouvelle_quantite_input = QLineEdit()
         self.nouvelle_quantite_input.setPlaceholderText("Nouvelle Quantité")
 
-        self.btn_modifier_vente = QPushButton("Modifier Vente")
-        self.btn_modifier_vente.clicked.connect(self.modifier_vente)
+        edit_form_layout.addWidget(self.id_vente_input)
+        edit_form_layout.addWidget(self.nouvelle_quantite_input)
 
-        self.btn_supprimer_vente = QPushButton("Supprimer Vente")
-        self.btn_supprimer_vente.clicked.connect(self.supprimer_vente)
-
-        # Ajout des widgets au layout
-        layout.addWidget(self.table_ventes)
-        layout.addWidget(QLabel("Nouvelle Vente:"))
-        layout.addWidget(self.client_id_input)
-        layout.addWidget(self.produit_id_input)
-        layout.addWidget(self.quantite_input)
-        layout.addWidget(self.btn_ajouter_vente)
-
-        layout.addWidget(QLabel("Modifier/Supprimer Vente:"))
-        layout.addWidget(self.id_vente_input)
-        layout.addWidget(self.nouvelle_quantite_input)
-        layout.addWidget(self.btn_modifier_vente)
-        layout.addWidget(self.btn_supprimer_vente)
+        layout.addLayout(edit_form_layout)
 
         self.tab_ventes.setLayout(layout)
+
+        # === Connexion des boutons ===
+        self.btn_ajouter_vente.clicked.connect(self.ajouter_vente)
+        self.btn_modifier_vente.clicked.connect(self.modifier_vente)
+        self.btn_supprimer_vente.clicked.connect(self.supprimer_vente)
+
+        self.refresh_vente_table()
 
     def refresh_vente_table(self):
         ventes = obtenir_ventes()
@@ -377,44 +415,65 @@ class AdminUI(QWidget):
     def setup_utilisateur_ui(self):
         layout = QVBoxLayout()
 
+        # === Formulaire ===
+        form_layout = QHBoxLayout()
+
         self.nom_utilisateur_input = QLineEdit()
         self.nom_utilisateur_input.setPlaceholderText("Nom d'utilisateur")
 
         self.role_utilisateur_input = QLineEdit()
-        self.role_utilisateur_input.setPlaceholderText("Role de l'utilisateur")
+        self.role_utilisateur_input.setPlaceholderText("Rôle")
 
         self.mdp_utilisateur_input = QLineEdit()
         self.mdp_utilisateur_input.setPlaceholderText("Mot de passe")
         self.mdp_utilisateur_input.setEchoMode(QLineEdit.EchoMode.Password)
 
-        self.btn_ajouter_utilisateur = QPushButton("Ajouter Utilisateur")
-        self.btn_ajouter_utilisateur.clicked.connect(self.ajouter_utilisateur)
+        form_layout.addWidget(self.nom_utilisateur_input)
+        form_layout.addWidget(self.role_utilisateur_input)
+        form_layout.addWidget(self.mdp_utilisateur_input)
 
-        self.btn_modifier_utilisateur = QPushButton("Modifier Utilisateur")
-        self.btn_modifier_utilisateur.clicked.connect(self.modifier_utilisateur)
+        layout.addLayout(form_layout)
 
-        self.btn_supprimer_utilisateur = QPushButton("Supprimer Utilisateur")
-        self.btn_supprimer_utilisateur.clicked.connect(self.supprimer_utilisateur)
+        # === Boutons ===
+        btn_layout = QHBoxLayout()
+        self.btn_ajouter_utilisateur = QPushButton("Ajouter")
+        self.btn_modifier_utilisateur = QPushButton("Modifier")
+        self.btn_supprimer_utilisateur = QPushButton("Supprimer")
 
+        for btn in [self.btn_ajouter_utilisateur, self.btn_modifier_utilisateur, self.btn_supprimer_utilisateur]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #3498db;
+                    color: white;
+                    padding: 6px;
+                    font-size: 14px;
+                    border-radius: 5px;
+                }
+                QPushButton:hover {
+                    background-color: #2980b9;
+                }
+            """)
+            btn_layout.addWidget(btn)
+
+        layout.addLayout(btn_layout)
+
+        # === Tableau des utilisateurs ===
         self.table_utilisateurs = QTableWidget()
         self.table_utilisateurs.setColumnCount(3)
-        self.table_utilisateurs.setHorizontalHeaderLabels(["ID", "Nom d'utilisateur","Role"])
+        self.table_utilisateurs.setHorizontalHeaderLabels(["ID", "Nom d'utilisateur", "Rôle"])
+        self.table_utilisateurs.setStyleSheet("background-color: white; border: 1px solid #ccc;")
+
+        layout.addWidget(self.table_utilisateurs)
+        self.tab_utilisateurs.setLayout(layout)
+
+        # === Connexion des boutons ===
+        self.btn_ajouter_utilisateur.clicked.connect(self.ajouter_utilisateur)
+        self.btn_modifier_utilisateur.clicked.connect(self.modifier_utilisateur)
+        self.btn_supprimer_utilisateur.clicked.connect(self.supprimer_utilisateur)
         self.table_utilisateurs.itemSelectionChanged.connect(self.remplir_champs_utilisateur)
 
-
-        layout.addWidget(QLabel("Nom d'utilisateur:"))
-        layout.addWidget(self.nom_utilisateur_input)
-        layout.addWidget(QLabel("Role de l'utilisateur:"))
-        layout.addWidget(self.role_utilisateur_input)
-        layout.addWidget(QLabel("Mot de passe:"))
-        layout.addWidget(self.mdp_utilisateur_input)
-        layout.addWidget(self.btn_ajouter_utilisateur)
-        layout.addWidget(self.btn_modifier_utilisateur)
-        layout.addWidget(self.btn_supprimer_utilisateur)
-        layout.addWidget(self.table_utilisateurs)
-
-        self.tab_utilisateurs.setLayout(layout)
         self.refresh_utilisateur_table()
+
 
     def refresh_utilisateur_table(self):
         utilisateurs = obtenir_utilisateurs()

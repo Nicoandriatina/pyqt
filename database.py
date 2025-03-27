@@ -67,7 +67,7 @@ def ajouter_produit(nom, prix, stock):
     conn.close()
 
 
-def modifier_produit(id_produit, nom, prix, stock):
+def modifier_produit(id_produit, nom, stock, prix):
     # Connexion à la base de données
     conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
@@ -75,9 +75,9 @@ def modifier_produit(id_produit, nom, prix, stock):
     # Exécution de la requête de mise à jour du produit
     cursor.execute("""
         UPDATE produits
-        SET nom = ?, prix = ?, stock = ?
+        SET nom = ?, stock = ?, prix = ?
         WHERE id = ?
-    """, (nom, prix, stock, id_produit))
+    """, (nom,stock,prix, id_produit))
     
     # Validation de la modification et fermeture de la connexion
     conn.commit()
@@ -139,17 +139,17 @@ def obtenir_ventes():
     return ventes
 
 
-
-
-import sqlite3
-
 def ajouter_vente(client_id, produit_id, quantite):
     conn = sqlite3.connect("vente.db")
     cursor = conn.cursor()
 
     try:
         # Vérifier le stock disponible
+        cursor.execute("PRAGMA table_info(produits);")  # Vérifie la structure de la table
+        print("DEBUG - Structure de produits :", cursor.fetchall())
+
         cursor.execute("SELECT stock FROM produits WHERE id = ?", (produit_id,))
+        # cursor.execute("SELECT stock FROM produits WHERE id = ?", (produit_id,))
         produit = cursor.fetchone()
 
         if produit is None:
